@@ -11,9 +11,9 @@
                 <div class="p-6 text-gray-900">
                     <div class="mb-4 flex justify-between items-center">
                         <h3 class="text-lg font-semibold">Daftar Item</h3>
-                        <button type="button" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600" data-bs-toggle="modal" data-bs-target="#createItemModal">
-                            Tambah Item
-                        </button>
+                        <button type="button" class="px-4 py-2 bg-blue-500 text-black rounded-md hover:bg-blue-600" onclick="toggleItemCard()">
+        Tambah Item
+    </button>
                     </div>
                     
                     @if (session('success'))

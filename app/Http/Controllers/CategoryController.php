@@ -45,6 +45,13 @@ class CategoryController extends Controller
 
         $category->update($request->all());
 
+        if ($request->ajax()) {
+            return response()->json([
+                'success' => true,
+                'message' => 'Kategori berhasil diperbarui.'
+            ]);
+        }
+
         return redirect()->route('categories.index')
             ->with('success', 'Kategori berhasil diperbarui.');
     }

@@ -11,7 +11,7 @@
                 <div class="p-6 text-gray-900">
                     <div class="mb-4 flex justify-between items-center">
                         <h3 class="text-lg font-semibold">Daftar Kategori</h3>
-                        <button type="button" class="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600" data-bs-toggle="modal" data-bs-target="#createCategoryModal">
+                        <button type="button" class="px-4 py-2 bg-blue-500 text-black rounded-md hover:bg-blue-600" onclick="toggleCategoryCard()">
                             Tambah Kategori
                         </button>
                     </div>
@@ -72,5 +72,9 @@
         </div>
     </div>
     
+    <!-- Modal Create Kategori -->
     @include('categories.modal-create')
+    
+    <!-- Script untuk Bootstrap Modal -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </x-app-layout>

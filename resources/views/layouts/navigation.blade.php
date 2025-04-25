@@ -94,6 +94,8 @@
             <x-responsive-nav-link :href="route('transactions.index')" :active="request()->routeIs('transactions.*')">
                 {{ __('Transaksi') }}
             </x-responsive-nav-link>
+
+            
         </div>
 
         <!-- Responsive Settings Options -->

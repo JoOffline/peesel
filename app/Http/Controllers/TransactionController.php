@@ -38,6 +38,10 @@ class TransactionController extends Controller
 
     public function store(Request $request)
     {
+        $request->validate([
+            'paid_amount' => 'required|numeric|min:0',
+        ]);
+
         DB::beginTransaction();
         try {
             $carts = Cart::with('item')
@@ -49,6 +53,16 @@ class TransactionController extends Controller
                 return redirect()->back()->with('error', 'Tidak ada item yang sudah di-checkout!');
             }
             
+            // Hitung total belanja
+            $totalAmount = $carts->sum(function($cart) {
+                return $cart->price * $cart->quantity;
+            });
+            
+            // Validasi jumlah pembayaran
+            if ($request->paid_amount < $totalAmount) {
+                return redirect()->back()->with('error', 'Jumlah pembayaran kurang dari total belanja.');
+            }
+            
             // Validasi stok sekali lagi
             foreach ($carts as $cart) {
                 if ($cart->quantity > $cart->item->stock) {
@@ -56,14 +70,15 @@ class TransactionController extends Controller
                 }
             }
             
-            // Buat transaksi
+            // Buat transaksi baru
             $transaction = Transaction::create([
                 'user_id' => Auth::id(),
                 'invoice_number' => 'INV-' . time(),
-                'total_amount' => $carts->sum(function($cart) {
-                    return $cart->price * $cart->quantity;
-                }),
-                'status' => 'completed',
+                'total_amount' => $totalAmount,
+                'paid_amount' => $request->paid_amount,
+                'change_amount' => $request->paid_amount - $totalAmount,
+                // Hapus baris status jika kolom tidak ada di database
+                // 'status' => 'completed',
             ]);
             
             // Buat detail transaksi dan kurangi stok
@@ -88,7 +103,7 @@ class TransactionController extends Controller
                 ->delete();
             
             DB::commit();
-            return redirect()->route('transactions.index')->with('success', 'Transaksi berhasil diproses!');
+            return redirect()->route('transactions.index')->with('success', 'Transaksi berhasil diproses! Kembalian: Rp ' . number_format($request->paid_amount - $totalAmount, 0, ',', '.'));
         } catch (\Exception $e) {
             DB::rollBack();
             return redirect()->back()->with('error', 'Terjadi kesalahan: ' . $e->getMessage());
@@ -209,5 +224,22 @@ class TransactionController extends Controller
     public function editStatus(Transaction $transaction)
     {
         return view('transactions.edit_status', compact('transaction'));
+    }
+    
+    /**
+     * Calculate total amount from checkout items in cart
+     * 
+     * @return float
+     */
+    private function calculateTotalAmount()
+    {
+        $carts = Cart::with('item')
+                ->where('user_id', Auth::id())
+                ->where('status', 'checkout')
+                ->get();
+                
+        return $carts->sum(function($cart) {
+            return $cart->price * $cart->quantity;
+        });
     }
 }

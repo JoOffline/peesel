@@ -11,6 +11,11 @@ class CartController extends Controller
 {
     public function index()
     {
+        $carts = Cart::where('user_id', Auth::id())
+                ->where('status', 'cart')
+                ->with('item')
+                ->get();
+                
         $pendingCarts = Cart::where('user_id', Auth::id())
                 ->where('status', 'pending')
                 ->with('item')
@@ -21,7 +26,7 @@ class CartController extends Controller
                 ->with('item')
                 ->get();
         
-        return view('carts.index', compact('pendingCarts', 'checkoutCarts'));
+        return view('carts.index', compact('carts', 'pendingCarts', 'checkoutCarts'));
     }
 
     public function store(Request $request)
@@ -31,59 +36,48 @@ class CartController extends Controller
             'quantity' => 'required|integer|min:1',
         ]);
         
+        // Periksa stok item
         $item = Item::findOrFail($request->item_id);
         
-        // Validasi stok
-        if ($request->quantity > $item->stock) {
-            return redirect()->back()->with('error', 'Jumlah melebihi stok yang tersedia!');
+        // Jika stok habis, kembalikan error
+        if ($item->stock <= 0) {
+            return redirect()->back()->with('error', 'Stok item habis!');
+        }
+        
+        // Jika stok kurang dari jumlah yang diminta, kembalikan error
+        if ($item->stock < $request->quantity) {
+            return redirect()->back()->with('error', 'Stok tidak mencukupi! Stok tersedia: ' . $item->stock);
         }
         
         // Cek apakah item sudah ada di keranjang
         $existingCart = Cart::where('user_id', Auth::id())
                             ->where('item_id', $request->item_id)
-                            ->where('status', 'pending')
+                            ->where('status', 'cart')
                             ->first();
         
         if ($existingCart) {
-            // Update jumlah jika item sudah ada di keranjang
-            $newQuantity = $existingCart->quantity + $request->quantity;
-            
-            // Validasi stok lagi
-            if ($newQuantity > $item->stock) {
-                return redirect()->back()->with('error', 'Total jumlah melebihi stok yang tersedia!');
+            // Jika stok tidak mencukupi untuk total quantity, kembalikan error
+            if ($item->stock < ($existingCart->quantity + $request->quantity)) {
+                return redirect()->back()->with('error', 'Stok tidak mencukupi! Stok tersedia: ' . $item->stock);
             }
             
-            $existingCart->quantity = $newQuantity;
+            // Update quantity jika item sudah ada di keranjang
+            $existingCart->quantity += $request->quantity;
             $existingCart->save();
         } else {
-            // Tambahkan item baru ke keranjang
+            
             Cart::create([
                 'user_id' => Auth::id(),
                 'item_id' => $request->item_id,
                 'quantity' => $request->quantity,
                 'price' => $item->price,
-                'status' => 'pending'
+                'status' => 'cart', 
             ]);
         }
         
         return redirect()->route('carts.index')->with('success', 'Item berhasil ditambahkan ke keranjang!');
     }
     
-    public function checkout(Request $request)
-    {
-        $cartIds = $request->input('cart_ids', []);
-        
-        if (empty($cartIds)) {
-            return redirect()->back()->with('error', 'Pilih setidaknya satu item untuk checkout.');
-        }
-        
-        // Update status cart menjadi 'checkout'
-        Cart::whereIn('id', $cartIds)
-            ->where('user_id', Auth::id())
-            ->update(['status' => 'checkout']);
-        
-        return redirect()->route('carts.index')->with('success', 'Item berhasil di-checkout.');
-    }
     
     public function destroy($id)
     {
@@ -104,5 +98,63 @@ class CartController extends Controller
         return redirect()->route('carts.index')->with('success', 'Item berhasil dihapus dari keranjang.');
     }
 
+    public function update(Request $request, Cart $cart)
+    {
+        $request->validate([
+            'quantity' => 'required|integer|min:1',
+        ]);
+        
+        // Periksa stok
+        $item = $cart->item;
+        
+        // Jika stok tidak mencukupi, kembalikan error
+        if ($item->stock < $request->quantity) {
+            return redirect()->back()->with('error', 'Stok tidak mencukupi! Stok tersedia: ' . $item->stock);
+        }
+        
+        // Update quantity
+        $cart->quantity = $request->quantity;
+        $cart->save();
+        
+        return redirect()->route('carts.index')->with('success', 'Jumlah item berhasil diperbarui!');
+    }
     
+    public function checkout()
+    {
+        $carts = Cart::where('user_id', Auth::id())
+                    ->where('status', 'cart')
+                    ->with('item')
+                    ->get();
+        
+        if ($carts->isEmpty()) {
+            return redirect()->route('carts.index')->with('error', 'Keranjang kosong!');
+        }
+        
+        // Periksa stok sebelum checkout
+        foreach ($carts as $cart) {
+            $item = $cart->item;
+            
+            // Jika stok tidak mencukupi, kembalikan error
+            if ($item->stock < $cart->quantity) {
+                return redirect()->route('carts.index')->with('error', 'Stok ' . $item->name . ' tidak mencukupi! Stok tersedia: ' . $item->stock);
+            }
+        }
+        
+        // Proses checkout dan kurangi stok
+        foreach ($carts as $cart) {
+            // Kurangi stok
+            $item = $cart->item;
+            $item->stock -= $cart->quantity;
+            $item->save();
+            
+            // Update status cart menjadi checkout
+            $cart->status = 'checkout';
+            $cart->save();
+            
+            // Buat transaksi (jika diperlukan)
+            // ... kode untuk membuat transaksi ...
+        }
+        
+        return redirect()->route('transactions.index')->with('success', 'Checkout berhasil!');
+    }
 }
